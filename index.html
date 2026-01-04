@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Core Guardian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Core Engine Styles */
+        body { margin: 0; overflow: hidden; background: #020617; font-family: 'Inter', sans-serif; color: white; touch-action: none; user-select: none; -webkit-user-select: none; }
+        canvas { display: block; image-rendering: pixelated; width: 100%; height: 100%; }
+        
+        /* UI Layers */
+        .ui-overlay { position: absolute; pointer-events: none; width: 100%; height: 100%; z-index: 10; }
+        .interactive { pointer-events: auto; }
+        
+        /* Animations */
+        .progress-bar { transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .artifact-popup { animation: slideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Scrollbars */
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .tab-btn.active { border-bottom: 2px solid #06b6d4; color: #06b6d4; }
+
+        /* Joystick */
+        #joystick-zone { position: absolute; bottom: 20px; left: 20px; width: 150px; height: 150px; z-index: 20; display: none; }
+        @media (pointer: coarse) { #joystick-zone { display: block; } }
+    </style>
+</head>
+<body>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm z-50 transition-opacity duration-500">
+        <h1 class="text-5xl md:text-7xl font-black mb-2 text-cyan-400 text-center tracking-tighter drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">CORE GUARDIAN</h1>
+        <p class="text-slate-500 mb-8 max-w-md text-center px-4 font-bold uppercase tracking-widest text-[10px] md:text-xs">Final Defense Protocol // v1.0</p>
+        
+        <div class="flex flex-col md:flex-row gap-4 interactive w-full max-w-xs md:max-w-none px-4 justify-center">
+            <button onclick="startGame()" class="px-8 py-4 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 rounded-xl font-bold text-lg md:text-xl transition-all shadow-lg hover:shadow-cyan-500/20 uppercase tracking-wider w-full md:w-auto">Initialize</button>
+            <button onclick="toggleSettings()" class="px-6 py-4 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-xl font-bold text-xl transition-all w-full md:w-auto flex justify-center items-center">⚙️</button>
+        </div>
+        <p class="mt-8 text-slate-600 text-[10px] uppercase tracking-widest animate-pulse">Touch screen enabled</p>
+    </div>
+
+    <!-- Settings Menu -->
+    <div id="settings-menu" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-[60]">
+        <div class="bg-slate-900 border border-slate-700 w-[95%] max-w-2xl h-[80%] rounded-2xl flex flex-col shadow-2xl interactive overflow-hidden">
+            <div class="flex border-b border-slate-700 p-4 justify-between items-center bg-slate-900/50">
+                <h2 class="text-xl md:text-2xl font-black uppercase text-white tracking-widest">Config</h2>
+                <div class="flex gap-4 overflow-x-auto">
+                    <button onclick="switchTab('audio')" id="tab-audio" class="tab-btn active text-slate-400 font-bold hover:text-white uppercase text-xs md:text-sm pb-1 transition-colors">Audio</button>
+                    <button onclick="switchTab('stats')" id="tab-stats" class="tab-btn text-slate-400 font-bold hover:text-white uppercase text-xs md:text-sm pb-1 transition-colors">Stats</button>
+                    <button onclick="switchTab('help')" id="tab-help" class="tab-btn text-slate-400 font-bold hover:text-white uppercase text-xs md:text-sm pb-1 transition-colors">Help</button>
+                </div>
+            </div>
+            
+            <div id="settings-content" class="p-4 md:p-8 flex-1 overflow-y-auto custom-scroll bg-slate-950/30">
+                <!-- Audio Section -->
+                <div id="section-audio" class="space-y-6 max-w-md mx-auto">
+                    <div class="space-y-4">
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                            <div class="flex justify-between mb-3"><label class="text-[10px] font-black text-cyan-500 uppercase tracking-widest">Master</label><span id="val-master" class="text-xs font-mono">50%</span></div>
+                            <input type="range" data-type="master" min="0" max="1" step="0.1" value="0.5" class="vol-slider w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-cyan-500">
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                            <div class="flex justify-between mb-3"><label class="text-[10px] font-black text-purple-500 uppercase tracking-widest">Music</label><span id="val-music" class="text-xs font-mono">30%</span></div>
+                            <input type="range" data-type="music" min="0" max="1" step="0.1" value="0.3" class="vol-slider w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-purple-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex justify-between mb-2"><label class="text-[9px] font-bold text-slate-500 uppercase">SFX: Weapons</label></div>
+                            <input type="range" data-type="weapon" min="0" max="1" step="0.1" value="1.0" class="vol-slider w-full h-1 bg-slate-800 rounded-full appearance-none cursor-pointer accent-slate-400">
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-2"><label class="text-[9px] font-bold text-slate-500 uppercase">SFX: Enemies</label></div>
+                            <input type="range" data-type="enemy" min="0" max="1" step="0.1" value="1.0" class="vol-slider w-full h-1 bg-slate-800 rounded-full appearance-none cursor-pointer accent-slate-400">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Section -->
+                <div id="section-stats" class="hidden space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-[9px] text-cyan-500 font-black uppercase mb-3 tracking-widest">Offense</h4>
+                            <div class="space-y-2 text-xs font-mono text-slate-300">
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span>Base Dmg</span> <span id="stat-dmg" class="text-white">--</span></div>
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span>Fire Rate</span> <span id="stat-rate" class="text-white">--</span></div>
+                                <div class="flex justify-between"><span>Multiplier</span> <span id="stat-mult" class="text-yellow-400">--</span></div>
+                            </div>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-[9px] text-emerald-500 font-black uppercase mb-3 tracking-widest">Defense</h4>
+                            <div class="space-y-2 text-xs font-mono text-slate-300">
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span>Speed</span> <span id="stat-speed" class="text-white">--</span></div>
+                                <div class="flex justify-between border-b border-slate-800 pb-1"><span>Max HP</span> <span id="stat-hp" class="text-white">--</span></div>
+                                <div class="flex justify-between"><span>Next Solar</span> <span id="stat-solar" class="text-yellow-400">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                        <h4 class="text-[9px] text-purple-500 font-black uppercase mb-3 tracking-widest">Artifacts & Upgrades</h4>
+                        <div id="stat-powerups" class="flex flex-wrap gap-2 min-h-[50px] content-start"></div>
+                    </div>
+                </div>
+
+                <!-- Help Section -->
+                <div id="section-help" class="hidden space-y-6">
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                        <h3 class="text-cyan-400 font-bold uppercase mb-2 text-sm">Mission</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">Defend the Core. It drains energy constantly. Build <span class="text-yellow-500">Solar Generators</span> to recharge it. If Core Energy or Player HP hits 0, game over.</p>
+                    </div>
+                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                        <h3 class="text-cyan-400 font-bold uppercase mb-2 text-sm">Controls</h3>
+                        <ul class="text-xs text-slate-400 space-y-2 list-disc pl-4">
+                            <li><strong class="text-white">Desktop:</strong> WASD to move, Mouse to aim. Auto-fire is active. Scroll to Zoom.</li>
+                            <li><strong class="text-white">Mobile:</strong> Left Joystick to move. Auto-aims at nearest threat.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-700 flex justify-end bg-slate-900">
+                <button onclick="toggleSettings()" class="px-8 py-3 bg-white hover:bg-slate-200 text-slate-950 rounded-lg font-black uppercase tracking-widest transition-colors text-sm">Resume</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over -->
+    <div id="game-over" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-50 animate-fade-in">
+        <h2 class="text-5xl md:text-7xl font-black text-red-600 mb-4 tracking-tighter">CRITICAL FAILURE</h2>
+        <p id="death-reason" class="text-slate-400 mb-8 font-mono text-sm uppercase tracking-widest"></p>
+        <button onclick="location.reload()" class="interactive px-12 py-4 bg-white hover:bg-slate-200 text-black rounded-lg font-black uppercase tracking-widest transition-transform hover:scale-105">Reboot System</button>
+    </div>
+
+    <!-- HUD -->
+    <div class="ui-overlay p-4 md:p-6 flex flex-col justify-between">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-start w-full">
+            <!-- Vitals -->
+            <div class="space-y-3">
+                <div class="bg-slate-900/80 p-3 rounded-lg border-l-4 border-cyan-500 w-64 backdrop-blur-sm shadow-lg">
+                    <div class="flex justify-between text-[10px] font-black mb-1 text-cyan-400 tracking-wider"><span>CORE INTEGRITY</span><span id="energy-text">100/100</span></div>
+                    <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden mb-2">
+                        <div id="energy-bar" class="progress-bar h-full bg-cyan-500 rounded-full" style="width: 100%"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-black mb-1 text-rose-400 tracking-wider"><span>SUIT INTEGRITY</span><span id="player-hp-text">100/100</span></div>
+                    <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                        <div id="player-hp-bar" class="progress-bar h-full bg-rose-500 rounded-full" style="width: 100%"></div>
+                    </div>
+                </div>
+                <!-- Mini Stats -->
+                <div class="flex gap-2">
+                    <div class="bg-black/60 px-3 py-1 rounded text-[10px] text-slate-400 font-mono border border-slate-800"><span id="drain-text">DRN: -1.0</span></div>
+                    <div class="bg-black/60 px-3 py-1 rounded text-[10px] text-slate-400 font-mono border border-slate-800"><span id="gen-text">GEN: +0.0</span></div>
+                </div>
+                <!-- Artifact Icons -->
+                <div id="artifacts-list" class="flex flex-wrap gap-1 w-64"></div>
+            </div>
+
+            <!-- Meta Info -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="flex gap-2">
+                    <div class="bg-slate-900/80 px-4 py-2 rounded-lg border-r-4 border-yellow-500 flex items-center gap-2 backdrop-blur-sm">
+                        <span class="text-yellow-400 font-black text-xs tracking-wider">CREDITS</span>
+                        <span id="gold-text" class="text-xl font-mono text-white">250</span>
+                    </div>
+                    <div class="bg-slate-900/80 px-4 py-2 rounded-lg border-r-4 border-blue-500 flex items-center gap-2 backdrop-blur-sm">
+                        <span class="text-blue-400 font-black text-xs tracking-wider">WAVE</span>
+                        <span id="wave-text" class="text-xl font-mono text-white">1</span>
+                    </div>
+                </div>
+                <div id="wave-timer" class="text-xs text-slate-400 font-black tracking-widest bg-black/60 px-3 py-1 rounded border border-slate-800">NEXT: 10.0s</div>
+                <button onclick="toggleSettings()" class="interactive p-2 bg-slate-900/80 rounded hover:bg-slate-800 border border-slate-700 text-slate-400 transition-colors">⚙️</button>
+            </div>
+        </div>
+
+        <!-- Boss Bar (Centered Top) -->
+        <div id="boss-ui" class="hidden absolute top-20 left-1/2 -translate-x-1/2 w-[90%] md:w-[600px] z-20">
+            <div class="flex justify-between text-xs font-black text-red-500 mb-1 uppercase tracking-widest animate-pulse">
+                <span id="boss-name">THREAT DETECTED</span>
+                <span id="boss-hp-text">100%</span>
+            </div>
+            <div class="h-4 bg-slate-900 rounded-full border border-red-900/50 overflow-hidden shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+                <div id="boss-bar" class="h-full bg-red-600 progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- Popups -->
+        <div id="artifact-notif" class="hidden absolute bottom-40 left-1/2 -translate-x-1/2 artifact-popup z-30 w-64 md:w-auto">
+            <div class="bg-gradient-to-r from-yellow-600 to-amber-400 p-[2px] rounded-lg shadow-2xl">
+                <div class="bg-slate-900 px-6 py-4 rounded-lg flex flex-col items-center text-center">
+                    <span class="text-yellow-500 font-black text-[10px] uppercase mb-1 tracking-widest">Artifact Discovered</span>
+                    <h3 id="art-name" class="text-lg font-bold text-white mb-1">NAME</h3>
+                    <p id="art-desc" class="text-slate-400 text-xs italic"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Build Menu (Bottom Responsive) -->
+        <div class="flex flex-col items-center w-full gap-2 pointer-events-none">
+            <div class="pointer-events-auto flex gap-2 overflow-x-auto max-w-full p-2 bg-slate-950/80 backdrop-blur-md border border-slate-800 rounded-2xl custom-scroll" id="build-menu">
+                <!-- Buttons injected via JS -->
+            </div>
+            <div class="hidden md:block text-[9px] text-slate-500 font-bold uppercase tracking-[0.3em] bg-black/60 px-6 py-2 rounded-full border border-slate-800">
+                WASD Move | 1-7 Build | Scroll Zoom | B Shop
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgrade Modal -->
+    <div id="upgrade-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-40 p-4">
+        <h2 class="text-2xl md:text-4xl font-black mb-8 text-cyan-400 tracking-tighter uppercase">System Upgrade Available</h2>
+        <div id="upgrade-options" class="flex flex-col md:flex-row gap-4 interactive w-full max-w-4xl justify-center"></div>
+    </div>
+
+    <!-- Shop Modal -->
+    <div id="shop-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950/98 z-40 p-4">
+        <h2 class="text-3xl md:text-5xl font-black mb-2 text-blue-500 uppercase italic">Armory</h2>
+        <p class="text-slate-500 mb-8 text-xs tracking-widest uppercase">Select Weapon Configuration</p>
+        <div id="shop-options" class="flex flex-col md:flex-row gap-4 interactive w-full max-w-5xl justify-center flex-wrap"></div>
+        <button onclick="closeShop()" class="interactive mt-8 text-slate-500 hover:text-white uppercase tracking-[0.2em] text-xs transition-colors border-b border-transparent hover:border-white pb-1">Exit Armory</button>
+    </div>
+
+    <!-- Joystick Zone -->
+    <div id="joystick-zone"></div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // --- AUDIO ENGINE ---
+        const AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioSettings = { master: 0.5, music: 0.3, weapon: 1.0, building: 1.0, enemy: 1.0 };
+        let musicGain = null;
+        let isMusicPlaying = false;
+
+        function initAudio() {
+            if (AudioCtx.state === 'suspended') AudioCtx.resume();
+        }
+
+        function startMusic() {
+            if (isMusicPlaying) return;
+            isMusicPlaying = true;
+            
+            musicGain = AudioCtx.createGain();
+            musicGain.connect(AudioCtx.destination);
+            musicGain.gain.setValueAtTime(audioSettings.master * audioSettings.music, AudioCtx.currentTime);
+
+            const playDrone = () => {
+                if(!isMusicPlaying) return;
+                const osc = AudioCtx.createOscillator();
+                const g = AudioCtx.createGain();
+                osc.type = 'triangle';
+                // Ambient chord structure
+                const notes = [55, 65.41, 73.42, 82.41, 98.00]; 
+                osc.frequency.setValueAtTime(notes[Math.floor(Math.random()*notes.length)], AudioCtx.currentTime);
+                g.gain.setValueAtTime(0, AudioCtx.currentTime);
+                g.gain.linearRampToValueAtTime(0.04, AudioCtx.currentTime + 3);
+                g.gain.linearRampToValueAtTime(0, AudioCtx.currentTime + 10);
+                osc.connect(g); g.connect(musicGain);
+                osc.start(); osc.stop(AudioCtx.currentTime + 10);
+                setTimeout(playDrone, 4000);
+            };
+            
+            // Bass line
+            const bass = AudioCtx.createOscillator();
+            const bassGain = AudioCtx.createGain();
+            bass.type = 'sine';
+            bass.frequency.setValueAtTime(41.20, AudioCtx.currentTime); // Low E
+            bassGain.gain.value = 0.05;
+            bass.connect(bassGain); bassGain.connect(musicGain);
+            bass.start();
+
+            playDrone();
+        }
+
+        function playSfx(type) {
+            initAudio();
+            const osc = AudioCtx.createOscillator();
+            const gain = AudioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(AudioCtx.destination);
+            const now = AudioCtx.currentTime;
+
+            if (type === 'shoot') {
+                osc.type = 'triangle'; // Softer than square
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+                gain.gain.setValueAtTime(0.08 * audioSettings.master * audioSettings.weapon, now); 
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                osc.start(); osc.stop(now + 0.15);
+            } else if (type === 'hit') {
+                // Thud sound
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.linearRampToValueAtTime(40, now + 0.08);
+                gain.gain.setValueAtTime(0.15 * audioSettings.master * audioSettings.enemy, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.08);
+                osc.start(); osc.stop(now + 0.08);
+            } else if (type === 'build') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.linearRampToValueAtTime(800, now + 0.1);
+                gain.gain.setValueAtTime(0.05 * audioSettings.master * audioSettings.building, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                osc.start(); osc.stop(now + 0.1);
+            } else if (type === 'boss') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, now);
+                osc.frequency.linearRampToValueAtTime(30, now + 1.5);
+                gain.gain.setValueAtTime(0.2 * audioSettings.master * audioSettings.enemy, now);
+                gain.gain.linearRampToValueAtTime(0, now + 1.5);
+                osc.start(); osc.stop(now + 1.5);
+            }
+        }
+
+        // --- JOYSTICK LOGIC ---
+        const joystick = { active: false, dx: 0, dy: 0, originX: 0, originY: 0, id: null };
+        const joyZone = document.getElementById('joystick-zone');
+        
+        joyZone.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            joystick.id = touch.identifier;
+            joystick.active = true;
+            joystick.originX = touch.clientX;
+            joystick.originY = touch.clientY;
+            joystick.dx = 0; joystick.dy = 0;
+            initAudio(); // Unlock audio context on first touch
+        });
+
+        joyZone.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (!joystick.active) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === joystick.id) {
+                    const touch = e.changedTouches[i];
+                    const maxDist = 50;
+                    let dx = touch.clientX - joystick.originX;
+                    let dy = touch.clientY - joystick.originY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > maxDist) {
+                        dx = (dx / dist) * maxDist;
+                        dy = (dy / dist) * maxDist;
+                    }
+                    joystick.dx = dx / maxDist;
+                    joystick.dy = dy / maxDist;
+                    break;
+                }
+            }
+        });
+
+        const endJoystick = (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === joystick.id) {
+                    joystick.active = false;
+                    joystick.dx = 0;
+                    joystick.dy = 0;
+                    break;
+                }
+            }
+        };
+        joyZone.addEventListener('touchend', endJoystick);
+        joyZone.addEventListener('touchcancel', endJoystick);
+
+
+        // --- GAME ENGINE ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI References
+        const UI = {
+            energyBar: document.getElementById('energy-bar'),
+            energyText: document.getElementById('energy-text'),
+            playerHpBar: document.getElementById('player-hp-bar'),
+            playerHpText: document.getElementById('player-hp-text'),
+            goldText: document.getElementById('gold-text'),
+            waveText: document.getElementById('wave-text'),
+            waveTimer: document.getElementById('wave-timer'),
+            drainText: document.getElementById('drain-text'),
+            genText: document.getElementById('gen-text'),
+            buildMenu: document.getElementById('build-menu'),
+            upgradeScreen: document.getElementById('upgrade-screen'),
+            upgradeOptions: document.getElementById('upgrade-options'),
+            shopScreen: document.getElementById('shop-screen'),
+            shopOptions: document.getElementById('shop-options'),
+            bossUi: document.getElementById('boss-ui'),
+            bossBar: document.getElementById('boss-bar'),
+            bossName: document.getElementById('boss-name'),
+            bossHpText: document.getElementById('boss-hp-text'),
+            artNotif: document.getElementById('artifact-notif'),
+            artName: document.getElementById('art-name'),
+            artDesc: document.getElementById('art-desc'),
+            artifactsList: document.getElementById('artifacts-list'),
+            settings: document.getElementById('settings-menu'),
+            gameOver: document.getElementById('game-over'),
+            // Settings sections
+            sectionAudio: document.getElementById('section-audio'),
+            sectionHelp: document.getElementById('section-help'),
+            sectionStats: document.getElementById('section-stats'),
+            tabAudio: document.getElementById('tab-audio'),
+            tabHelp: document.getElementById('tab-help'),
+            tabStats: document.getElementById('tab-stats')
+        };
+
+        let gameRunning = false;
+        let lastTime = 0;
+        let camera = { x: 0, y: 0, zoom: 1.0 }; // Default zoom closer for impact
+        let mouseX = 0, mouseY = 0;
+        let isMobile = 'ontouchstart' in window;
+        
+        const state = {
+            player: {
+                x: 0, y: 0, radius: 15, speed: 220,
+                hp: 100, maxHp: 100,
+                damage: 25, attackSpeed: 0.7, lastAttack: 0,
+                xp: 0, level: 1, xpNext: 100,
+                weapon: 'PISTOL', pickupRange: 60
+            },
+            core: {
+                x: 0, y: 0, radius: 50,
+                energy: 1000, maxEnergy: 1000,
+                drainRate: 2.0, baseDrain: 2.0,
+                range: 300, lastRegen: 0
+            },
+            gold: 250,
+            wave: 1,
+            waveCountdown: 10,
+            enemies: [],
+            bullets: [],
+            buildings: [],
+            drops: [],
+            artifacts: [],
+            upgradesTaken: [],
+            activeBoss: null,
+            keys: {},
+            selectedBuild: null,
+            gridSize: 40,
+            solarCount: 0,
+            // Multipliers
+            playerDmgMult: 1, towerDmgMult: 1, goldMult: 1,
+            rangeMult: 1, genMult: 1, buildingHpMult: 1, bulletSpeedMult: 1
+        };
+
+        const WEAPONS = {
+            PISTOL: { name: 'Pistol', damage: 30, fireRate: 0.45, bullets: 1, spread: 0, cost: 0 },
+            SHOTGUN: { name: 'Shotgun', damage: 20, fireRate: 0.9, bullets: 6, spread: 0.45, cost: 350 },
+            PLASMA: { name: 'Plasma', damage: 60, fireRate: 0.2, bullets: 1, spread: 0.05, cost: 900 },
+            RAILGUN: { name: 'Railgun', damage: 400, fireRate: 1.8, bullets: 1, spread: 0, cost: 1800 }
+        };
+
+        const BUILDING_TYPES = {
+            TURRET: { name: 'Sentry', icon: '🔫', cost: 75, energyCost: 1.5, hp: 150, range: 350, damage: 20, fireRate: 0.3, color: '#3b82f6' },
+            PYLON: { name: 'Pylon', icon: '📡', cost: 40, energyCost: 0.5, hp: 80, range: 450, isRelay: true, color: '#06b6d4' },
+            GENERATOR: { name: 'Solar', icon: '☀️', cost: 180, energyGen: 2.5, hp: 100, range: 0, color: '#f59e0b' },
+            MINER: { name: 'Ex-Drill', icon: '⛏️', cost: 120, energyCost: 3, hp: 150, goldGen: 3.5, color: '#8b5cf6' },
+            HEALER: { name: 'Medi-Pad', icon: '➕', cost: 150, energyCost: 4, hp: 120, healRate: 10, color: '#10b981' },
+            SHOP: { name: 'Armory', icon: '⚔️', cost: 250, energyCost: 2, hp: 200, range: 120, isShop: true, color: '#ef4444' },
+            WALL: { name: 'Blast Wall', icon: '🧱', cost: 30, energyCost: 0, hp: 800, isWall: true, color: '#64748b' }
+        };
+
+        const ENEMY_TYPES = [
+            { name: 'Swarm', hp: 40, speed: 85, damage: 12, radius: 10, color: '#f43f5e', xp: 20, weight: 10 },
+            { name: 'Brute', hp: 180, speed: 55, damage: 60, radius: 20, color: '#9f1239', xp: 60, weight: 3 },
+            { name: 'Scout', hp: 20, speed: 185, damage: 10, radius: 8, color: '#fb7185', xp: 15, weight: 5 },
+            { name: 'Splinter', hp: 60, speed: 125, damage: 40, radius: 12, color: '#ea580c', xp: 30, weight: 3, explosive: true },
+            { name: 'Shielder', hp: 140, speed: 70, damage: 5, radius: 15, color: '#2563eb', xp: 45, weight: 2, isShielder: true }
+        ];
+
+        const BOSS_TYPES = [
+            { name: 'THE COLOSSUS', hp: 2000, speed: 30, damage: 80, radius: 60, color: '#7f1d1d' },
+            { name: 'THE SUMMONER', hp: 1250, speed: 45, damage: 40, radius: 45, color: '#4c1d95' },
+            { name: 'THE GLITCH', hp: 1500, speed: 90, damage: 50, radius: 40, color: '#064e3b' },
+            { name: 'THE DEVOURER', hp: 2500, speed: 25, damage: 100, radius: 70, color: '#000000' }
+        ];
+
+        const ARTIFACTS = [
+            { id: 'art1', name: 'Core Pulse', desc: 'Core fires energy bolts.', effect: (s) => s.core.shoots = true },
+            { id: 'art2', name: 'Proximity Overload', desc: '+100% damage near Core.', effect: (s) => s.core.nearDmg = 2 },
+            { id: 'art3', name: 'Glass Cannon', desc: '5x Tower dmg, 0.3x Player dmg.', effect: (s) => { s.towerDmgMult *= 5; s.playerDmgMult *= 0.33; } },
+            { id: 'art4', name: 'Titan Force', desc: '5x Player dmg, 0.3x Tower dmg.', effect: (s) => { s.playerDmgMult *= 5; s.towerDmgMult *= 0.33; } },
+            { id: 'art5', name: 'Energy Vampirism', desc: 'Kills restore Energy.', effect: (s) => s.vamp = true },
+            { id: 'art6', name: 'Scavenger Bot', desc: 'Auto-collect drops.', effect: (s) => s.player.pickupRange = 300 },
+            { id: 'art7', name: 'Midas Touch', desc: '+50% Gold drops.', effect: (s) => s.goldMult *= 1.5 },
+            { id: 'art8', name: 'Superconductors', desc: 'Building range +40%.', effect: (s) => s.rangeMult *= 1.4 },
+            { id: 'art9', name: 'Reactive Armor', desc: '-40% damage taken.', effect: (s) => s.player.dr = 0.6 },
+            { id: 'art10', name: 'Light Speed', desc: 'Speed +50%.', effect: (s) => { s.player.speed *= 1.5; s.bulletSpeedMult *= 1.5; } },
+            { id: 'art11', name: 'Infinite Battery', desc: 'Core max energy +200.', effect: (s) => s.core.maxEnergy += 200 },
+            { id: 'art12', name: 'Rapid Reassembly', desc: 'Buildings 2x HP.', effect: (s) => s.buildingHpMult *= 2 },
+            { id: 'art13', name: 'Solar Flare', desc: 'Solar gen +100%.', effect: (s) => s.genMult *= 2 },
+            { id: 'art14', name: 'Chain Reaction', desc: 'Bullets pierce.', effect: (s) => s.pierceChance = 0.3 },
+            { id: 'art15', name: 'Last Stand', desc: 'Low Core = 3x Dmg.', effect: (s) => s.lastStand = true }
+        ];
+
+        const UPGRADES = [
+            { id: 'u1', name: 'Weapon Calib', desc: '+7.5% Damage', apply: () => { state.playerDmgMult *= 1.075; state.upgradesTaken.push('Dmg+7.5%'); } },
+            { id: 'u2', name: 'Athletics', desc: '+5% Speed', apply: () => { state.player.speed *= 1.05; state.upgradesTaken.push('Spd+5%'); } },
+            { id: 'u3', name: 'Hyper-Cooling', desc: '+5% Fire Rate', apply: () => { state.player.attackSpeed *= 0.95; state.upgradesTaken.push('Rate+0.5%'); } },
+            { id: 'u4', name: 'Plating', desc: '+50 Max HP', apply: () => { state.player.maxHp += 50; state.player.hp += 50; state.upgradesTaken.push('HP+50'); } }
+        ];
+
+        function init() {
+            // Input Handlers
+            window.addEventListener('keydown', e => {
+                state.keys[e.code] = true;
+                if (e.code.startsWith('Digit')) {
+                    const idx = parseInt(e.code.replace('Digit', '')) - 1;
+                    const keys = Object.keys(BUILDING_TYPES);
+                    if (keys[idx]) selectBuild(keys[idx]);
+                }
+                if (e.code === 'KeyB') openShop();
+                if (e.code === 'Escape') toggleSettings();
+            });
+            window.addEventListener('keyup', e => state.keys[e.code] = false);
+            
+            canvas.addEventListener('mousemove', e => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = e.clientX - rect.left;
+                mouseY = e.clientY - rect.top;
+            });
+            
+            // Mouse Shooting
+            canvas.addEventListener('mousedown', e => {
+                initAudio();
+                if (e.button === 0 && state.selectedBuild) {
+                    const worldX = (mouseX - canvas.width / 2) / camera.zoom + camera.x + canvas.width / 2;
+                    const worldY = (mouseY - canvas.height / 2) / camera.zoom + camera.y + canvas.height / 2;
+                    placeBuilding(state.selectedBuild, worldX, worldY);
+                } else if (e.button === 2) {
+                    state.selectedBuild = null;
+                }
+            });
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+            canvas.addEventListener('touchstart', initAudio);
+
+            // Audio Slider Logic
+            document.querySelectorAll('.vol-slider').forEach(slider => {
+                slider.addEventListener('input', (e) => {
+                    const type = e.target.dataset.type;
+                    audioSettings[type] = parseFloat(e.target.value);
+                    document.getElementById(`val-${type}`).innerText = Math.round(audioSettings[type] * 100) + '%';
+                    if ((type === 'music' || type === 'master') && musicGain) {
+                        musicGain.gain.setValueAtTime(audioSettings.master * audioSettings.music, AudioCtx.currentTime);
+                    }
+                });
+            });
+
+            // Mobile Zoom (Scroll)
+            canvas.addEventListener('wheel', e => {
+                const zoomFactor = 0.1;
+                if (e.deltaY < 0) camera.zoom = Math.min(camera.zoom + zoomFactor, 2.0);
+                else camera.zoom = Math.max(camera.zoom - zoomFactor, 0.4);
+            }, { passive: true });
+
+            window.addEventListener('resize', resize);
+            resize();
+            createBuildMenu();
+        }
+
+        function createBuildMenu() {
+            UI.buildMenu.innerHTML = '';
+            Object.entries(BUILDING_TYPES).forEach(([key, type], index) => {
+                const btn = document.createElement('button');
+                btn.id = `btn-${key}`;
+                btn.className = 'flex flex-col items-center p-2 rounded-xl hover:bg-slate-800 border-2 border-transparent transition-all min-w-[60px] md:min-w-[70px] bg-slate-900/80 active:scale-95';
+                btn.innerHTML = `
+                    <span class="text-[9px] text-slate-500 font-black mb-1 group-hover:text-cyan-500">${index + 1}</span>
+                    <span class="text-xl md:text-2xl mb-1">${type.icon}</span>
+                    <span id="cost-${key}" class="text-[9px] font-mono font-bold text-yellow-500">${type.cost}</span>
+                `;
+                btn.onclick = (e) => { e.stopPropagation(); selectBuild(key); };
+                UI.buildMenu.appendChild(btn);
+            });
+        }
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+
+        // --- GAME LOOP LOGIC ---
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('start-screen').style.pointerEvents = 'none';
+            gameRunning = true;
+            lastTime = performance.now();
+            initAudio();
+            startMusic();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function toggleSettings() {
+            if (UI.settings.classList.contains('hidden')) {
+                gameRunning = false;
+                updateStatsPanel();
+                UI.settings.classList.remove('hidden');
+            } else {
+                UI.settings.classList.add('hidden');
+                if (UI.upgradeScreen.classList.contains('hidden') && UI.shopScreen.classList.contains('hidden') && UI.gameOver.classList.contains('hidden')) {
+                    gameRunning = true; lastTime = performance.now(); requestAnimationFrame(gameLoop);
+                }
+            }
+        }
+
+        function switchTab(tab) {
+            UI.sectionAudio.classList.add('hidden'); UI.sectionHelp.classList.add('hidden'); UI.sectionStats.classList.add('hidden');
+            UI.tabAudio.classList.remove('active'); UI.tabHelp.classList.remove('active'); UI.tabStats.classList.remove('active');
+            if (tab === 'audio') { UI.sectionAudio.classList.remove('hidden'); UI.tabAudio.classList.add('active'); }
+            else if (tab === 'help') { UI.sectionHelp.classList.remove('hidden'); UI.tabHelp.classList.add('active'); }
+            else { UI.sectionStats.classList.remove('hidden'); UI.tabStats.classList.add('active'); updateStatsPanel(); }
+        }
+
+        function updateStatsPanel() {
+            const w = WEAPONS[state.player.weapon];
+            // Actual damage = Base * Multiplier
+            const actualDmg = w.damage * state.playerDmgMult;
+            const actualRate = w.fireRate * state.player.attackSpeed;
+
+            document.getElementById('stat-dmg').innerText = actualDmg.toFixed(1);
+            document.getElementById('stat-rate').innerText = actualRate.toFixed(2) + 's';
+            document.getElementById('stat-mult').innerText = 'x' + state.playerDmgMult.toFixed(2);
+            document.getElementById('stat-speed').innerText = Math.round(state.player.speed);
+            document.getElementById('stat-hp').innerText = Math.round(state.player.maxHp);
+            
+            const nextSolarCost = Math.floor(BUILDING_TYPES.GENERATOR.cost * Math.pow(1.5, state.solarCount));
+            document.getElementById('stat-solar').innerText = nextSolarCost + 'G';
+
+            const container = document.getElementById('stat-powerups');
+            container.innerHTML = '';
+            const items = [...state.upgradesTaken, ...state.artifacts.map(a => a.name)];
+            if (items.length === 0) container.innerHTML = '<span class="text-xs text-slate-500 italic">None</span>';
+            else items.forEach(p => {
+                const el = document.createElement('span');
+                el.className = 'px-2 py-1 bg-slate-800 border border-slate-700 rounded text-[9px] uppercase font-bold text-cyan-500';
+                el.innerText = p;
+                container.appendChild(el);
+            });
+        }
+
+        function selectBuild(type) { state.selectedBuild = (state.selectedBuild === type) ? null : type; }
+
+        function placeBuilding(typeKey, x, y) {
+            const type = BUILDING_TYPES[typeKey];
+            let cost = type.cost;
+            if (typeKey === 'GENERATOR') cost = Math.floor(type.cost * Math.pow(1.5, state.solarCount));
+            
+            if (state.gold < cost) return;
+            const gx = Math.round(x / state.gridSize) * state.gridSize;
+            const gy = Math.round(y / state.gridSize) * state.gridSize;
+            if (Math.hypot(gx - state.core.x, gy - state.core.y) < state.core.radius + 15) return;
+            if (state.buildings.some(b => Math.hypot(b.x - gx, b.y - gy) < 30)) return;
+            
+            state.gold -= cost;
+            playSfx('build');
+            if (typeKey === 'GENERATOR') {
+                state.solarCount++;
+                document.getElementById('cost-GENERATOR').innerText = Math.floor(type.cost * Math.pow(1.5, state.solarCount));
+            }
+            state.buildings.push({
+                ...type, type: typeKey, x: gx, y: gy,
+                hp: type.hp * state.buildingHpMult, maxHp: type.hp * state.buildingHpMult,
+                lastFire: 0, powered: false
+            });
+            state.selectedBuild = null;
+        }
+
+        function spawnWave() {
+            const isBossWave = (state.wave % 10 === 0);
+            if (isBossWave) {
+                const bossData = BOSS_TYPES[Math.floor(Math.random() * BOSS_TYPES.length)];
+                const angle = Math.random() * Math.PI * 2;
+                state.activeBoss = {
+                    ...bossData,
+                    x: Math.cos(angle) * 1100, y: Math.sin(angle) * 1100,
+                    hp: bossData.hp * (1 + state.wave * 0.15),
+                    maxHp: bossData.hp * (1 + state.wave * 0.15),
+                    lastAbility: 0
+                };
+                playSfx('boss');
+                UI.bossUi.classList.remove('hidden');
+                UI.bossName.innerText = state.activeBoss.name;
+            }
+
+            const count = Math.floor((5 + state.wave * 2) * Math.pow(1.08, state.wave));
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 900 + Math.random() * 400;
+                
+                // Enemy Type Selection
+                let type = ENEMY_TYPES[0];
+                if (state.wave > 3) {
+                    const pool = ENEMY_TYPES.filter((_, idx) => idx <= Math.min(ENEMY_TYPES.length-1, Math.ceil(state.wave/3)));
+                    const totalW = pool.reduce((a,b) => a + b.weight, 0);
+                    let r = Math.random() * totalW;
+                    for (const t of pool) { if (r < t.weight) { type = t; break; } r -= t.weight; }
+                }
+
+                const scale = 1 + (state.wave * 0.1);
+                state.enemies.push({ ...type, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist,
+                    hp: type.hp * scale, maxHp: type.hp * scale, damage: type.damage * scale });
+            }
+            state.wave++; state.waveCountdown = 30;
+        }
+
+        function giveArtifact() {
+            const available = ARTIFACTS.filter(a => !state.artifacts.includes(a));
+            if (available.length === 0) return;
+            const art = available[Math.floor(Math.random() * available.length)];
+            state.artifacts.push(art);
+            art.effect(state);
+            
+            UI.artName.innerText = art.name; UI.artDesc.innerText = art.desc;
+            UI.artNotif.classList.remove('hidden');
+            setTimeout(() => UI.artNotif.classList.add('hidden'), 5000);
+
+            const icon = document.createElement('div');
+            icon.className = 'w-8 h-8 md:w-10 md:h-10 bg-yellow-600/20 border border-yellow-500 rounded flex items-center justify-center text-[8px] md:text-xs font-bold text-yellow-500 shadow-lg cursor-help';
+            icon.innerText = art.name.split(' ').map(n => n[0]).join('');
+            icon.title = `${art.name}: ${art.desc}`;
+            UI.artifactsList.appendChild(icon);
+        }
+
+        function playerShoot(targetX, targetY) {
+            const weapon = WEAPONS[state.player.weapon];
+            const now = performance.now();
+            if (now - state.player.lastAttack < weapon.fireRate * 1000 * state.player.attackSpeed) return;
+            
+            playSfx('shoot');
+            const baseAngle = Math.atan2(targetY - state.player.y, targetX - state.player.x);
+            
+            for (let i = 0; i < weapon.bullets; i++) {
+                const angle = baseAngle + (Math.random() - 0.5) * weapon.spread;
+                state.bullets.push({
+                    x: state.player.x, y: state.player.y,
+                    vx: Math.cos(angle) * 700 * state.bulletSpeedMult,
+                    vy: Math.sin(angle) * 700 * state.bulletSpeedMult,
+                    damage: weapon.damage * state.playerDmgMult * (state.lastStand && (state.core.energy/state.core.maxEnergy < 0.3) ? 3 : 1),
+                    owner: 'player', life: 1.5, pierce: state.pierceChance && Math.random() < state.pierceChance,
+                    radius: 6 // Increased bullet size
+                });
+            }
+            state.player.lastAttack = now;
+        }
+
+        function checkLevelUp() {
+            if (state.player.xp >= state.player.xpNext) {
+                state.player.xp -= state.player.xpNext;
+                state.player.level++; state.player.xpNext = Math.floor(state.player.xpNext * 1.45);
+                showUpgradeScreen();
+            }
+        }
+
+        function showUpgradeScreen() {
+            gameRunning = false; UI.upgradeScreen.classList.remove('hidden'); UI.upgradeOptions.innerHTML = '';
+            [...UPGRADES].sort(() => 0.5 - Math.random()).slice(0, 3).forEach(u => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full md:w-64 p-6 bg-slate-900 border-2 border-slate-800 hover:border-cyan-500 active:border-cyan-400 rounded-2xl text-center transition-all group';
+                btn.innerHTML = `<h3 class="font-black text-lg mb-2 group-hover:text-cyan-400 uppercase tracking-tighter">${u.name}</h3><p class="text-xs text-slate-500 uppercase font-bold">${u.desc}</p>`;
+                btn.onclick = () => { u.apply(); UI.upgradeScreen.classList.add('hidden'); gameRunning = true; lastTime = performance.now(); requestAnimationFrame(gameLoop); };
+                UI.upgradeOptions.appendChild(btn);
+            });
+        }
+
+        function openShop() {
+            if (!state.buildings.some(b => b.isShop && b.powered && Math.hypot(b.x-state.player.x, b.y-state.player.y) < 150)) return;
+            gameRunning = false; UI.shopScreen.classList.remove('hidden'); UI.shopOptions.innerHTML = '';
+            Object.entries(WEAPONS).forEach(([key, w]) => {
+                const owned = state.player.weapon === key;
+                const btn = document.createElement('button');
+                btn.className = `w-full md:w-56 p-6 bg-slate-900 border-2 rounded-2xl text-center transition-all ${owned ? 'border-cyan-900 opacity-40 grayscale pointer-events-none' : 'border-slate-800 hover:border-blue-500'}`;
+                btn.innerHTML = `<h3 class="font-black text-lg mb-1 uppercase tracking-tighter">${w.name}</h3><p class="text-[10px] text-slate-500 mb-6 font-bold uppercase">Dmg: ${w.damage} | Rate: ${w.fireRate}s</p><span class="px-6 py-2 bg-blue-600 rounded-full text-[10px] font-black tracking-widest">${owned ? 'ACTIVE' : w.cost}</span>`;
+                btn.onclick = () => { if (state.gold >= w.cost) { state.gold -= w.cost; state.player.weapon = key; closeShop(); } };
+                UI.shopOptions.appendChild(btn);
+            });
+        }
+
+        function closeShop() { UI.shopScreen.classList.add('hidden'); gameRunning = true; lastTime = performance.now(); requestAnimationFrame(gameLoop); }
+
+        function updateUI(drain, gen) {
+            UI.energyBar.style.width = `${Math.max(0, (state.core.energy / state.core.maxEnergy) * 100)}%`;
+            UI.energyText.innerText = `${Math.floor(state.core.energy)}/${state.core.maxEnergy}`;
+            UI.playerHpBar.style.width = `${Math.max(0, (state.player.hp / state.player.maxHp) * 100)}%`;
+            UI.playerHpText.innerText = `${Math.floor(state.player.hp)}/${state.player.maxHp}`;
+            UI.goldText.innerText = Math.floor(state.gold); UI.waveText.innerText = state.wave;
+            UI.waveTimer.innerText = `NEXT: ${Math.max(0, state.waveCountdown).toFixed(1)}s`;
+            UI.drainText.innerText = `DRN: -${drain.toFixed(1)}`; UI.genText.innerText = `GEN: +${gen.toFixed(1)}`;
+            
+            Object.keys(BUILDING_TYPES).forEach(k => {
+                const el = document.getElementById(`btn-${k}`);
+                if (el) {
+                    if (state.selectedBuild === k) el.classList.add('border-cyan-500', 'bg-slate-800');
+                    else el.classList.remove('border-cyan-500', 'bg-slate-800');
+                }
+            });
+        }
+
+        function update(dt) {
+            if (!gameRunning) return;
+
+            // Movement Logic (Keyboard + Joystick)
+            let mx = 0, my = 0;
+            if (state.keys['KeyW']) my -= 1; if (state.keys['KeyS']) my += 1;
+            if (state.keys['KeyA']) mx -= 1; if (state.keys['KeyD']) mx += 1;
+            
+            // Add joystick input
+            if (joystick.active) {
+                mx += joystick.dx;
+                my += joystick.dy;
+            }
+
+            if (mx !== 0 || my !== 0) {
+                // Normalize if mainly keyboard, joystick is already normalized 0-1
+                const mag = Math.sqrt(mx*mx + my*my);
+                if (mag > 1) { mx /= mag; my /= mag; }
+                
+                state.player.x += mx * state.player.speed * dt;
+                state.player.y += my * state.player.speed * dt;
+            }
+
+            // Aiming Logic
+            let targetX, targetY;
+            
+            if (isMobile) {
+                // Smart Aim: Find nearest enemy
+                let nearest = null;
+                let minDist = 500; // Aim range
+                [...state.enemies, state.activeBoss].filter(Boolean).forEach(e => {
+                    const d = Math.hypot(e.x - state.player.x, e.y - state.player.y);
+                    if (d < minDist) { minDist = d; nearest = e; }
+                });
+
+                if (nearest) {
+                    targetX = nearest.x;
+                    targetY = nearest.y;
+                    // Auto shoot on mobile if enemy nearby
+                    playerShoot(targetX, targetY);
+                } else {
+                    // Default aim in movement direction
+                    targetX = state.player.x + (mx * 100);
+                    targetY = state.player.y + (my * 100);
+                }
+            } else {
+                // Desktop Mouse Aim
+                targetX = (mouseX - canvas.width / 2) / camera.zoom + camera.x + canvas.width / 2;
+                targetY = (mouseY - canvas.height / 2) / camera.zoom + camera.y + canvas.height / 2;
+                playerShoot(targetX, targetY);
+            }
+
+            // Camera Follow
+            camera.x += (state.player.x - canvas.width/2 - camera.x) * 5 * dt;
+            camera.y += (state.player.y - canvas.height/2 - camera.y) * 5 * dt;
+
+            // Wave Logic
+            state.waveCountdown -= dt;
+            if (state.waveCountdown <= 0) spawnWave();
+
+            let totalDrain = state.core.baseDrain;
+            let totalGen = 0;
+
+            // Core Shooting
+            if (state.core.shoots) {
+                const now = performance.now();
+                if (now - state.core.lastRegen > 800) {
+                    const target = state.enemies[0] || state.activeBoss;
+                    if (target && Math.hypot(target.x - state.core.x, target.y - state.core.y) < 500) {
+                        const angle = Math.atan2(target.y - state.core.y, target.x - state.core.x);
+                        state.bullets.push({ x: state.core.x, y: state.core.y, vx: Math.cos(angle)*500, vy: Math.sin(angle)*500, damage: 40, owner: 'core', life: 2, radius: 8 });
+                        state.core.lastRegen = now;
+                    }
+                }
+            }
+
+            // Buildings Logic
+            state.buildings.forEach(b => {
+                const distToCore = Math.hypot(b.x - state.core.x, b.y - state.core.y);
+                b.powered = (distToCore < state.core.range) || state.buildings.some(r => r.isRelay && r.powered && Math.hypot(b.x - r.x, b.y - r.y) < r.range * state.rangeMult);
+
+                if (b.powered) {
+                    if (b.energyCost) totalDrain += b.energyCost;
+                    if (b.energyGen) totalGen += b.energyGen * state.genMult;
+                    if (b.type === 'TURRET') {
+                        const target = state.enemies.find(e => Math.hypot(e.x - b.x, e.y - b.y) < b.range * state.rangeMult);
+                        const now = performance.now();
+                        if (target && now - b.lastFire > b.fireRate * 1000) {
+                            // Predictive aiming (Lead the target)
+                            const dist = Math.hypot(target.x - b.x, target.y - b.y);
+                            const lead = dist / 500; // approximate travel time
+                            const aimX = target.x + (target.x - b.x)/dist * (target.speed || 0) * lead; // Basic lead
+                            const aimY = target.y + (target.y - b.y)/dist * (target.speed || 0) * lead;
+                            
+                            const angle = Math.atan2(target.y - b.y, target.x - b.x); // Simple angle is safer for homing
+                            state.bullets.push({ 
+                                x: b.x, y: b.y, 
+                                vx: Math.cos(angle)*550, vy: Math.sin(angle)*550, 
+                                damage: b.damage * state.towerDmgMult, owner: 'building', life: 1.8,
+                                target: target, radius: 5
+                            });
+                            b.lastFire = now;
+                        }
+                    }
+                    if (b.type === 'MINER') state.gold += b.goldGen * state.goldMult * dt;
+                    if (b.type === 'HEALER') { if (Math.hypot(state.player.x - b.x, state.player.y - b.y) < 120) state.player.hp = Math.min(state.player.maxHp, state.player.hp + b.healRate * dt); }
+                }
+            });
+
+            // Enemies Logic
+            state.enemies.forEach((e, idx) => {
+                const wall = state.buildings.find(b => b.isWall && Math.hypot(b.x - e.x, b.y - e.y) < 300);
+                let target = state.core;
+                if (wall) target = wall;
+                else if (Math.hypot(state.player.x - e.x, state.player.y - e.y) < 250) target = state.player;
+
+                const angle = Math.atan2(target.y - e.y, target.x - e.x);
+                const distToTarget = Math.hypot(target.x - e.x, target.y - e.y);
+                if (distToTarget > (target.radius || 15)) { 
+                    e.x += Math.cos(angle) * e.speed * dt; 
+                    e.y += Math.sin(angle) * e.speed * dt; 
+                } else {
+                    if (target === state.core) state.core.energy -= e.damage * dt;
+                    else if (target.isWall) { target.hp -= e.damage * dt; if (target.hp <= 0) state.buildings = state.buildings.filter(b => b !== target); }
+                    else state.player.hp -= e.damage * dt;
+                }
+                
+                // Proximity Core Drain
+                if (Math.hypot(e.x - state.core.x, e.y - state.core.y) < state.core.radius) state.core.energy -= 2 * dt;
+
+                if (e.hp <= 0) { 
+                    state.enemies.splice(idx, 1); state.player.xp += e.xp; 
+                    if (Math.random() < 0.4) state.drops.push({ x: e.x, y: e.y, type: 'GOLD', amount: 15 });
+                    if (Math.random() < 0.2) state.drops.push({ x: e.x, y: e.y, type: 'ENERGY', amount: 20 });
+                    if (state.vamp) state.core.energy = Math.min(state.core.maxEnergy, state.core.energy + 1);
+                    checkLevelUp(); 
+                }
+            });
+
+            // Boss Logic
+            if (state.activeBoss) {
+                const b = state.activeBoss;
+                const angle = Math.atan2(state.core.y - b.y, state.core.x - b.x);
+                b.x += Math.cos(angle) * b.speed * dt;
+                b.y += Math.sin(angle) * b.speed * dt;
+                if (Math.hypot(state.core.x - b.x, state.core.y - b.y) < b.radius + state.core.radius) state.core.energy -= b.damage * dt;
+                if (b.hp <= 0) {
+                    state.activeBoss = null;
+                    UI.bossUi.classList.add('hidden');
+                    state.gold += 800;
+                    giveArtifact();
+                }
+                UI.bossBar.style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+                UI.bossHpText.innerText = `${Math.ceil((b.hp/b.maxHp)*100)}%`;
+            }
+
+            // Bullets Logic
+            state.bullets.forEach((b, idx) => {
+                // Homing for turrets
+                if (b.owner === 'building' && b.target && b.target.hp > 0) {
+                    const angle = Math.atan2(b.target.y - b.y, b.target.x - b.x);
+                    const speed = 550;
+                    // Simple easing towards target vector
+                    b.vx = b.vx * 0.9 + Math.cos(angle) * speed * 0.1;
+                    b.vy = b.vy * 0.9 + Math.sin(angle) * speed * 0.1;
+                }
+                b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+                if (b.life <= 0) state.bullets.splice(idx, 1);
+                
+                [...state.enemies, state.activeBoss].filter(Boolean).forEach(e => {
+                    if (Math.hypot(e.x - b.x, e.y - b.y) < e.radius + b.radius) { 
+                        e.hp -= b.damage; 
+                        if (!b.pierce) b.life = 0; 
+                        playSfx('hit'); 
+                    }
+                });
+            });
+
+            // Drops
+            state.drops.forEach((d, idx) => {
+                if (Math.hypot(d.x - state.player.x, d.y - state.player.y) < state.player.pickupRange) {
+                    if (d.type === 'GOLD') state.gold += d.amount;
+                    if (d.type === 'ENERGY') state.core.energy = Math.min(state.core.maxEnergy, state.core.energy + d.amount);
+                    state.drops.splice(idx, 1);
+                }
+            });
+
+            state.core.energy = Math.max(0, Math.min(state.core.maxEnergy, state.core.energy + (totalGen - totalDrain) * dt));
+            
+            if (state.core.energy <= 0 || state.player.hp <= 0) { 
+                gameRunning = false; 
+                UI.gameOver.classList.remove('hidden'); 
+                document.getElementById('death-reason').innerText = state.player.hp <= 0 ? "Biological Failure" : "Core Collapse";
+            }
+            
+            updateUI(totalDrain, totalGen);
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); 
+            ctx.translate(canvas.width/2, canvas.height/2); 
+            ctx.scale(camera.zoom, camera.zoom); 
+            ctx.translate(-canvas.width/2 - camera.x, -canvas.height/2 - camera.y);
+            
+            // Grid
+            ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1;
+            const s = state.gridSize;
+            // Optimize grid drawing to only viewable area
+            const startX = Math.floor((camera.x) / s) * s - 100;
+            const startY = Math.floor((camera.y) / s) * s - 100;
+            const endX = startX + (canvas.width / camera.zoom) + 200;
+            const endY = startY + (canvas.height / camera.zoom) + 200;
+
+            ctx.beginPath();
+            for(let x = startX; x < endX; x += s) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
+            for(let y = startY; y < endY; y += s) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
+            ctx.stroke();
+
+            // Core Range
+            ctx.globalAlpha = 0.05; ctx.fillStyle = '#22d3ee';
+            ctx.beginPath(); ctx.arc(state.core.x, state.core.y, state.core.range, 0, Math.PI*2); ctx.fill();
+            state.buildings.forEach(b => { if(b.isRelay && b.powered) { ctx.beginPath(); ctx.arc(b.x, b.y, b.range*state.rangeMult, 0, Math.PI*2); ctx.fill(); }});
+            ctx.globalAlpha = 1;
+
+            // Core
+            const pulse = 0.8 + Math.sin(Date.now()/200)*0.2;
+            ctx.shadowBlur = 40*pulse; ctx.shadowColor = '#06b6d4'; ctx.fillStyle = '#06b6d4';
+            ctx.beginPath(); ctx.arc(state.core.x, state.core.y, state.core.radius, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Buildings
+            state.buildings.forEach(b => {
+                ctx.fillStyle = b.powered ? b.color : '#1e293b'; ctx.fillRect(b.x-15, b.y-15, 30, 30);
+                // Health bar
+                if (b.hp < b.maxHp) {
+                    ctx.fillStyle = '#000'; ctx.fillRect(b.x-15, b.y-25, 30, 4);
+                    ctx.fillStyle = '#10b981'; ctx.fillRect(b.x-15, b.y-25, (b.hp/b.maxHp)*30, 4);
+                }
+                ctx.fillStyle = '#fff'; ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.textBaseline='middle'; ctx.fillText(b.icon, b.x, b.y);
+            });
+
+            // Enemies
+            state.enemies.forEach(e => {
+                ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2); ctx.fill();
+                if (e.isShielder) { ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.stroke(); }
+                // Enemy HP Bar
+                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(e.x-12, e.y-e.radius-8, 24, 3);
+                ctx.fillStyle = '#f43f5e'; ctx.fillRect(e.x-12, e.y-e.radius-8, (e.hp/e.maxHp)*24, 3);
+            });
+
+            if (state.activeBoss) {
+                const b = state.activeBoss;
+                ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Bullets
+            state.bullets.forEach(b => {
+                ctx.fillStyle = b.owner === 'player' ? '#fff' : (b.owner === 'core' ? '#06b6d4' : '#fbbf24');
+                ctx.shadowBlur = 5; ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.radius || 4, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Drops
+            state.drops.forEach(d => {
+                ctx.fillStyle = d.type === 'GOLD' ? '#fbbf24' : '#06b6d4'; 
+                ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, Math.PI*2); ctx.fill();
+            });
+
+            // Player
+            ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = '#fff';
+            ctx.beginPath(); ctx.arc(state.player.x, state.player.y, state.player.radius, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Aim line for mobile
+            if (isMobile) {
+                // Find nearest to show aim direction
+                let nearest = null; let minDist = 500;
+                [...state.enemies, state.activeBoss].filter(Boolean).forEach(e => {
+                    const d = Math.hypot(e.x - state.player.x, e.y - state.player.y);
+                    if (d < minDist) { minDist = d; nearest = e; }
+                });
+                if (nearest) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+                    ctx.beginPath(); ctx.moveTo(state.player.x, state.player.y); ctx.lineTo(nearest.x, nearest.y); ctx.stroke(); ctx.setLineDash([]);
+                }
+            }
+
+            // Placement Ghost
+            if (state.selectedBuild) {
+                const worldX = (mouseX - canvas.width / 2) / camera.zoom + camera.x + canvas.width / 2;
+                const worldY = (mouseY - canvas.height / 2) / camera.zoom + camera.y + canvas.height / 2;
+                const gx = Math.round(worldX/s)*s, gy = Math.round(worldY/s)*s;
+                const type = BUILDING_TYPES[state.selectedBuild];
+                
+                if (type.range) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.arc(gx, gy, type.range*state.rangeMult, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.globalAlpha = 0.5; ctx.fillStyle = type.color; ctx.fillRect(gx-15, gy-15, 30, 30); ctx.globalAlpha = 1;
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(gx-15, gy-15, 30, 30);
+            }
+
+            ctx.restore();
+
+            // Draw Joystick UI on top of canvas if active
+            if (joystick.active) {
+                const jRadius = 40;
+                const kRadius = 20;
+                // Base
+                ctx.beginPath(); ctx.arc(joystick.originX, joystick.originY, jRadius, 0, Math.PI*2); 
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.stroke();
+                // Knob
+                const kx = joystick.originX + joystick.dx * 50;
+                const ky = joystick.originY + joystick.dy * 50;
+                ctx.beginPath(); ctx.arc(kx, ky, kRadius, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(6, 182, 212, 0.5)'; ctx.fill();
+            }
+        }
+
+        init();
+        function gameLoop(t) { if(!gameRunning) return; const dt = (t - lastTime)/1000; update(dt); draw(); lastTime = t; requestAnimationFrame(gameLoop); }
+    </script>
+</body>
+</html>
